@@ -1,7 +1,4 @@
-名称: RK3128 OpenWrt带打印服务器的编译版
-on:
-  push:
-    branches: [ main ]name: RK3128 OpenWrt Build with Print Server
+name: RK3128 OpenWrt Build with Print Server
 on:
   push:
     branches: [ main ]
@@ -35,33 +32,3 @@ jobs:
         with:
           name: rk3128-openwrt-firmware
           path: openwrt/bin/targets/rockchip/armv7/*.img.gz
-  workflow_dispatch:
-jobs:
-构建:
-运行于: ubuntu-22.04
-步骤:
-      - 名称: 检出
-使用: actions/checkout@v4
-      - 名称: 缓存DL目录
-使用: actions/cache@v3
-参数:
-路径: openwrt/dl
-          key: ${{ runner.os }}-openwrt-dl-${{ hashFiles('.config') }}
-          restore-keys: ${{ runner.os }}-openwrt-dl-
-      - name: 安装依赖
-运行: sudo apt-get update && sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget ccache
-      - name: 克隆OpenWrt快照
-运行: git 克隆 --depth=1 -b master https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
-      - 名称: 复制配置
-运行: cp .config openwrt/.config
-      - 名称: 更新源
-运行: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
-      - name: 下载依赖项
-        run: cd openwrt && make defconfig && make download -j$(nproc)
-      - name: 构建固件
-        run: cd openwrt && make -j$(nproc) V=s
-      - name: 上传固件
-        uses: actions/upload-artifact@v4
-参数:
-名称: rk3128-openwrt-firmware
-路径: openwrt/bin/targets/rockchip/armv7/*.img.gz
