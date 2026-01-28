@@ -4,34 +4,31 @@ on:
     branches: [ main ]
   workflow_dispatch:
 jobs:
-  build-firmware:
+  build:
     runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Cache OpenWrt DL Directory
-        uses: actions/cache@v3
-        with:
-          path: openwrt/dl
-          key: ${{ runner.os }}-openwrt-dl-${{ hashFiles('openwrt/.config') }}
-          restore-keys: |
-            ${{ runner.os }}-openwrt-dl-
-      - name: Install Build Dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget ccache
-      - name: Clone OpenWrt Source Code
-        run: git clone --depth=1 -b openwrt-23.05 https://github.com/openwrt/openwrt.git openwrt
-      - name: Copy Custom Config
-        run: cp .config openwrt/.config
-      - name: Update and Install Feeds
-        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
-      - name: Generate Defconfig
-        run: cd openwrt && make defconfig
-      - name: Download Build Dependencies
-        run: cd openwrt && make download -j$(nproc)
-      - name: Build Firmware
+步骤:
+      - 名称: 检出
+使用: actions/checkout@v4
+      - name: 缓存DL目录
+使用: actions/cache@v3
+参数:
+路径: openwrt/dl
+          key: ${{ runner.os }}-openwrt-dl-${{ hashFiles('.config') }}
+          restore-keys: ${{ runner.os }}-openwrt-dl-
+      - name: Install Dependencies
+运行: sudo apt-get update && sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget ccache
+      - name: Clone OpenWrt Snapshot
+运行: git 克隆 --depth=1 -b master https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
+      - 名称: 复制配置
+运行: cp .config openwrt/.config
+      - name: 更新源
+运行: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+      - name: 下载依赖项
+        run: cd openwrt && make defconfig && make download -j$(nproc)
+      - name: 构建固件
         run: cd openwrt && make -j$(nproc) V=s
-      - name: Upload Firmware Artifact
+      - name: 上传固件
         uses: actions/upload-artifact@v4
-        with:
-          name: rk3128-openwrt-firmware
-          path: openwrt/bin/targets/rockchip/armv7/*.img.gz
+参数:
+名称: rk3128-openwrt-firmware
+路径: openwrt/bin/targets/rockchip/armv7/*.img.gz
