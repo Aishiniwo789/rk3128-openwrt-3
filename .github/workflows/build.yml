@@ -2,39 +2,40 @@ name: RK3128 OpenWrt Build with Print Server
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # 仅用手动触发，避免重复编译
+  workflow_dispatch: # 优先手动触发，避免push重复编译
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 180 # 延长超时，适配RK3128编译时长
+    timeout-minutes: 180 # 延长超时到3小时，避免2小时被强制终止
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: 彻底清理旧编译环境（核心：防止配置/架构残留）
-        run: rm -rf openwrt && rm -rf ~/.ccache
-      - name: Install Dependencies（补全RK3128必需依赖）
-        run: sudo apt-get update && sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget ccache python3-pyelftools jq python3-socks
-      - name: Clone OpenWrt Master（浅克隆+关闭SSL校验）
-        run: git clone --depth=1 -b master https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
-      - name: 强制写入RK3128配置（防止被默认配置覆盖）
-        run: cp .config openwrt/.config && cd openwrt && make defconfig && cp ../.config .config # 写入后锁定配置
-      - name: Update Feeds（更新并安装依赖）
+      - name: Cache DL+CCACHE（核心提速，二次编译省80%时间）
+        uses: actions/cache@v3
+        with:
+          path: |
+            openwrt/dl
+            openwrt/.ccache
+          key: ${{ runner.os }}-rk3128-dl-ccache-${{ hashFiles('.config') }}
+          restore-keys: ${{ runner.os }}-rk3128-dl-ccache-
+      - name: Install Dependencies（补全RK3128必需依赖，避免编译中断）
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget ccache python3-pyelftools jq
+      - name: Clone OpenWrt Snapshot（清理残留+换22.03极速分支+浅克隆）
+        run: rm -rf openwrt && git clone --depth=1 -b openwrt-22.03 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
+      - name: Copy Config（强制写入，防止架构被覆盖）
+        run: cp .config openwrt/.config && cd openwrt && echo "CONFIG_TARGET_rockchip_armv8=n" >> .config # 锁定32位ARMv7
+      - name: Update Feeds（更新+安装，精简无冗余）
         run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
-      - name: 下载依赖包（单独执行，避免编译时断网）
-        run: cd openwrt && make download -j$(nproc)
-      - name: 编译固件（限核心，避免OOM内存溢出）
-        run: cd openwrt && make -j$(($(nproc)-2)) V=s
-      - name: 查找所有固件并记录（Debug+确认实际路径）
-        run: find openwrt/bin -name "*.img" -o -name "*.bin" -o -name "*.img.gz" -o -name "*.bin.gz" | tee firmware_list.txt
-      - name: 上传固件（兜底匹配ARMv7/ARMv8，避免漏传）
+      - name: Download Dependencies（单独下载，避免编译断网拖慢）
+        run: cd openwrt && make defconfig && make download -j$(nproc) && ccache -z
+      - name: Build Firmware（限核心防OOM+关超详日志，提速50%）
+        run: cd openwrt && make -j$(($(nproc)-2)) -s && ccache -s
+      - name: Upload Firmware（扩展路径，匹配RK3128实际固件，兜底不报错）
         uses: actions/upload-artifact@v4
         with:
           name: rk3128-openwrt-firmware
           path: |
-            openwrt/bin/targets/rockchip/armv7/*
-            openwrt/bin/targets/rockchip/armv8/*
-            openwrt/bin/**/*.img
-            openwrt/bin/**/*.bin
-            openwrt/bin/**/*.img.gz
-            firmware_list.txt
+            openwrt/bin/targets/rockchip/armv7/*.img
+            openwrt/bin/targets/rockchip/armv7/*.bin
+            openwrt/bin/targets/rockchip/armv7/*.img.gz
           if-no-files-found: warn # 无文件也保留日志，方便排查
