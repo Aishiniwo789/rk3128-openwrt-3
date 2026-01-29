@@ -27,12 +27,15 @@ jobs:
         run: cd openwrt && make defconfig && make download -j$(nproc)
       - name: Build Firmware
         run: cd openwrt && make -j$(($(nproc)-1)) V=s
+      - name: Find All Firmware
+        run: find openwrt/bin -name "*.img" -o -name "*.bin" -o -name "*.img.gz" -o -name "*.bin.gz" | tee firmware_list.txt
       - name: Upload Firmware
         uses: actions/upload-artifact@v4
         with:
           name: rk3128-openwrt-firmware
           path: |
-            openwrt/bin/targets/rockchip/armv7/*.img
-            openwrt/bin/targets/rockchip/armv7/*.bin
-            openwrt/bin/targets/rockchip/armv7/*.img.gz
-            openwrt/bin/targets/rockchip/armv7/*.bin.gz
+            openwrt/bin/targets/rockchip/armv7/*
+            openwrt/bin/**/*.img
+            openwrt/bin/**/*.bin
+            firmware_list.txt
+          if-no-files-found: warn
