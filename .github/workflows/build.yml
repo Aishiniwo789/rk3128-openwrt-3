@@ -6,29 +6,29 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-超时分钟: 180
-步骤:
+    timeout-minutes: 180
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: 彻底清理旧环境（杜绝ARMv8/配置残留）
-执行: rm -rf openwrt && rm -rf ~/.ccache && sudo apt-get clean
-      - name: 安装依赖项（21.02分支必需）
-运行: sudo apt-get update && sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget ccache python3-pyelftools jq
-      - name: 克隆OpenWrt 21.02（RK3128 ARMv7最优分支）
+        run: rm -rf openwrt && rm -rf ~/.ccache && sudo apt-get clean
+      - name: Install Dependencies (21.02分支必需)
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget ccache python3-pyelftools jq
+      - name: Clone OpenWrt 21.02（RK3128 ARMv7最优分支）
         run: git clone --depth=1 -b openwrt-21.02 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
-      - name: 复制配置 + 强制锁定ARMv7（覆盖式写入）
-: cp .config openwrt/.config && cd openwrt && echo -e"CONFIG_TARGET_rockchip=y CONFIG_TARGET_rockchip_armv7=y CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y CONFIG_TARGET_rockchip_armv8=n"> .config
-      - name: 更新源
-运行: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+      - name: Copy Config + 强制锁定ARMv7（覆盖式写入）
+        run: cp .config openwrt/.config && cd openwrt && echo -e "CONFIG_TARGET_rockchip=y\nCONFIG_TARGET_rockchip_armv7=y\nCONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_TARGET_rockchip_armv8=n" > .config
+      - name: Update Feeds
+        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
       - name: 先同步配置→再生成defconfig→单核心下载（解决报错核心）
         run: cd openwrt && make olddefconfig && make target/rockchip/armv7/defconfig && make download -j1
       - name: 编译固件（限核心防OOM，21.02分支适配）
-: cd openwrt && make -j$(($(nproc)-2)) V=s
+        run: cd openwrt && make -j$(($(nproc)-2)) V=s
       - name: 上传固件（优先ARMv7，兜底排查）
-使用: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: rk3128-openwrt-firmware
           path: |
             openwrt/bin/targets/rockchip/armv7/*
             openwrt/bin/targets/rockchip/armv8/*
-如果未找到文件: 警告
+          if-no-files-found: warn
