@@ -24,7 +24,6 @@ jobs:
           bc pciutils lm-sensors wsdd2 jq ntpdate smartmontools coreutils gperf \
           libunistring-dev libxml2-dev libpcre2-dev libcurl4-openssl-dev libtins-dev \
           libyaml-cpp-dev libglib2.0-dev libgpiod-dev libtirpc-dev libaio-dev
-        # 检查点：无“无法定位包”，所有依赖安装成功
 
       - name: 步骤4：克隆Lean版OpenWrt
         run: git clone --depth=1 https://github.com/coolsnowwolf/lede.git openwrt --config http.sslVerify=false
@@ -36,45 +35,14 @@ jobs:
           # 仅安装RK3128+打印服务+LuCI核心包，不装Lean冗余组件
           ./scripts/feeds install -y luci luci-app-p910nd p910nd kmod-usb-printer
 
-      - name: 步骤6：生成完整.config（禁用Lean冗余组件，避免交互）
-        run: |
-          cd openwrt
-          export TERM=xterm
-          # 生成完整配置，禁用Lean冗余组件，避免配置不全
-          cat > .config << EOF
-CONFIG_TARGET_rockchip=y
-CONFIG_TARGET_rockchip_armv7=y
-CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y
-CONFIG_PACKAGE_p910nd=y
-CONFIG_PACKAGE_kmod-usb-printer=y
-CONFIG_PACKAGE_luci-app-p910nd=y
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-theme-argon=y
-# 禁用Lean冗余组件，消除依赖警告
-CONFIG_PACKAGE_luci-app-autocore=n
-CONFIG_PACKAGE_luci-app-autosamba=n
-CONFIG_PACKAGE_luci-app-ddns=n
-CONFIG_PACKAGE_luci-app-fogvdn=n
-CONFIG_PACKAGE_luci-app-samba=n
-CONFIG_PACKAGE_kexec-tools=n
-CONFIG_PACKAGE_lldpd=n
-CONFIG_PACKAGE_policycoreutils=n
-# 核心：禁用全选，避免配置不全
-CONFIG_ALL=n
-CONFIG_ALL_KMODS=n
-CONFIG_ALL_NONSHARED=n
-CONFIG_DEVEL=y
-CONFIG_TOOLCHAINOPTS=y
-EOF
-          # 调和配置，强制使用现有.config
-          make -j1 olddefconfig CONFIG_DEFCONFIG_LIST=.config
+      - name: 步骤6：生成完整.config（单行echo适配YAML语法，无交互）
+        run: cd openwrt && export TERM=xterm && echo -e "CONFIG_TARGET_rockchip=y\nCONFIG_TARGET_rockchip_armv7=y\nCONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_luci-theme-argon=y\nCONFIG_PACKAGE_luci-app-autocore=n\nCONFIG_PACKAGE_luci-app-autosamba=n\nCONFIG_PACKAGE_luci-app-ddns=n\nCONFIG_PACKAGE_luci-app-fogvdn=n\nCONFIG_PACKAGE_luci-app-samba=n\nCONFIG_PACKAGE_kexec-tools=n\nCONFIG_PACKAGE_lldpd=n\nCONFIG_PACKAGE_policycoreutils=n\nCONFIG_ALL=n\nCONFIG_ALL_KMODS=n\nCONFIG_ALL_NONSHARED=n\nCONFIG_DEVEL=y\nCONFIG_TOOLCHAINOPTS=y" > .config && make -j1 olddefconfig CONFIG_DEFCONFIG_LIST=.config
 
       - name: 步骤7：下载依赖包（静默）
         run: cd openwrt && export TERM=xterm && make -j1 download > /dev/null 2>&1
 
       - name: 步骤8：强制静默编译（禁用menuconfig交互）
         run: cd openwrt && export TERM=xterm && make -s -j$(($(nproc)-1)) FORCE=1 CONFIG_DEFCONFIG_LIST=.config V=0
-        # 核心：FORCE=1 + CONFIG_DEFCONFIG_LIST=.config 禁用交互
 
       - name: 步骤9：上传固件
         uses: actions/upload-artifact@v4
