@@ -1,4 +1,4 @@
-name: RK3128 OpenWrt Build (Fix Config Syntax)
+name: RK3128 OpenWrt Build (100% Non-Interactive)
 on:
   push:
     branches: [ main ]
@@ -20,10 +20,10 @@ jobs:
         run: cd openwrt && sed -i '/telephony/d' feeds.conf.default && ./scripts/feeds update -a -q && rm -rf feeds/telephony && rm -rf package/feeds/telephony > /dev/null 2>&1
       - name: 仅安装必需Feeds（绝不触达telephony）
         run: cd openwrt && ./scripts/feeds install -y -q luci-base luci-mod-admin-full luci-theme-bootstrap p910nd kmod-usb-printer > /dev/null 2>&1
-      - name: 强制非交互生成Rockchip/armv7配置（核心修复）
-        run: cd openwrt && export TERM=xterm && echo "CONFIG_TARGET_rockchip=y;CONFIG_TARGET_rockchip_armv7=y;CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y;CONFIG_TARGET_ath79=n;CONFIG_PACKAGE_busybox_libpam=n;CONFIG_PACKAGE_kexec-tools=n;CONFIG_PACKAGE_lldpd=n;CONFIG_PACKAGE_policycoreutils=n" | tr ';' '\n' > .config && make -j1 defconfig > /dev/null 2>&1
-      - name: 启用打印服务+屏蔽冗余包（单行无换行符）
-        run: cd openwrt && echo "CONFIG_PACKAGE_p910nd=y;CONFIG_PACKAGE_kmod-usb-printer=y;CONFIG_PACKAGE_luci-app-p910nd=y;CONFIG_PACKAGE_luci=y;CONFIG_PACKAGE_luci-base=y;CONFIG_PACKAGE_luci-mod-admin-full=y;CONFIG_PACKAGE_luci-theme-bootstrap=y;CONFIG_PACKAGE_freeswitch=n;CONFIG_PACKAGE_kamailio=n" | tr ';' '\n' >> .config && export TERM=xterm && make -j1 config && make -j1 olddefconfig > /dev/null 2>&1
+      - name: 彻底非交互配置Rockchip/armv7（核心修复）
+        run: cd openwrt && export TERM=xterm && echo "CONFIG_ALL_N=y" > .config && ./scripts/config --set-val CONFIG_TARGET_rockchip y && ./scripts/config --set-val CONFIG_TARGET_rockchip_armv7 y && ./scripts/config --set-val CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128 y && ./scripts/config --set-val CONFIG_TARGET_ath79 n && ./scripts/config --disable busybox_libpam && ./scripts/config --disable kexec-tools && ./scripts/config --disable lldpd && ./scripts/config --disable policycoreutils && make -j1 defconfig > /dev/null 2>&1
+      - name: 非交互启用打印服务+LuCI（无任何交互）
+        run: cd openwrt && export TERM=xterm && ./scripts/config --enable p910nd && ./scripts/config --enable kmod-usb-printer && ./scripts/config --enable luci-app-p910nd && ./scripts/config --enable luci && ./scripts/config --enable luci-base && ./scripts/config --enable luci-mod-admin-full && ./scripts/config --enable luci-theme-bootstrap && ./scripts/config --disable freeswitch && ./scripts/config --disable kamailio && make -j1 olddefconfig > /dev/null 2>&1
       - name: 下载依赖（单核心+非交互）
         run: cd openwrt && export TERM=xterm && make -j1 download > /dev/null 2>&1
       - name: 编译固件（限核心+静默，避免OOM）
