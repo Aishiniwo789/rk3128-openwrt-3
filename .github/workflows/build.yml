@@ -1,42 +1,41 @@
-name: RK3128 OpenWrt Build (18.06.9 + Ubuntu 20.04)
+name: RK3128 OpenWrt Build (18.06.9 + ubuntu-latest)
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 jobs:
   build:
-    runs-on: ubuntu-20.04  # 核心：更换为适配的Ubuntu版本
-    timeout-minutes: 240   # 延长超时，适配18.06完整编译
+    runs-on: ubuntu-latest  # 核心：改用活跃的最新版runner，无等待
+    timeout-minutes: 240
     steps:
       - name: 步骤1：代码检出
         uses: actions/checkout@v4
 
-      - name: 步骤2：终极清理（释放资源）
+      - name: 步骤2：终极清理
         run: rm -rf openwrt && rm -rf ~/.ccache && sudo apt-get clean && sync && sudo swapoff -a
-        # 深度检查点：无报错，终端输出无红色提示
 
-      - name: 步骤3：安装完整依赖（适配OpenWrt 18.06）
+      - name: 步骤3：安装适配依赖（ubuntu22.04 + OpenWrt18.06.9）
         run: |
           sudo apt-get update
+          # 安装核心编译依赖 + Python2.7（OpenWrt18.06必需）
           sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git \
           libncurses5-dev libssl-dev python2.7 rsync unzip wget ccache u-boot-tools \
           libpam0g-dev liblzma-dev libncursesw5-dev libcap-dev
-        # 深度检查点：无“Unable to locate package”错误，所有包安装成功
+          # 创建Python软链接（让OpenWrt18.06找到Python2）
+          sudo ln -sf /usr/bin/python2.7 /usr/bin/python
+        # 检查点：无“无法定位包”，Python软链接创建成功
 
       - name: 步骤4：克隆OpenWrt 18.06.9（完整git历史，无浅克隆）
         run: git clone -b v18.06.9 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
-        # 深度检查点：克隆完成后，执行`cd openwrt && git log`能看到完整提交历史
+        # 检查点：克隆日志无报错，cd openwrt && git log 能看到完整历史
 
-      - name: 步骤5：Feeds配置（适配RK3128，无冗余依赖）
+      - name: 步骤5：Feeds配置（适配RK3128）
         run: |
           cd openwrt
-          # 删除telephony feeds，避免冗余
           sed -i '/telephony/d' feeds.conf.default 2>/dev/null
-          # 更新官方feeds（18.06.9原生源，无适配问题）
           ./scripts/feeds update -a
-          # 安装核心包（RK3128必需+打印服务+LuCI）
           ./scripts/feeds install -y luci luci-app-p910nd p910nd kmod-usb-printer
-        # 深度检查点：输出“Updated feed 'xxx'”和“Installing package 'xxx'”，无红色报错
+        # 检查点：输出“Updated feed”“Installing package”，无红色报错
 
       - name: 步骤6：生成RK3128专属配置（官方验证，无冲突）
         run: |
@@ -44,24 +43,24 @@ jobs:
           export TERM=xterm
           # 生成Rockchip/armv7基础配置
           make -j1 TARGET=rockchip SUBTARGET=armv7 defconfig
-          # 追加RK3128设备+核心功能配置（无冗余）
+          # 追加RK3128设备+核心功能
           echo -e "CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          # 调和配置（18.06.9的olddefconfig无兼容性问题）
+          # 调和配置（18.06.9无兼容性问题）
           make -j1 olddefconfig
-        # 深度检查点：输出“# configuration written to .config”，无“out of sync”警告
+        # 检查点：输出“# configuration written to .config”，无“out of sync”
 
-      - name: 步骤7：下载依赖包（单核心，避免冲突）
+      - name: 步骤7：下载依赖包
         run: cd openwrt && export TERM=xterm && make -j1 download
-        # 深度检查点：下载完成后，`ls openwrt/dl`能看到所有依赖包，无缺失
+        # 检查点：dl目录下有所有依赖包，无缺失
 
-      - name: 步骤8：编译固件（多核心加速，18.06.9无交互卡机）
+      - name: 步骤8：编译固件（多核心加速）
         run: cd openwrt && export TERM=xterm && make -j$(($(nproc)-1)) V=0
-        # 深度检查点：编译过程无menuconfig弹出，终端持续输出编译日志，无红色报错
+        # 检查点：无menuconfig弹出，编译日志持续输出，无红色报错
 
-      - name: 步骤9：上传固件（验证编译结果）
+      - name: 步骤9：上传固件（验证结果）
         uses: actions/upload-artifact@v4
         with:
-          name: rk3128-openwrt-firmware-18.06.9
+          name: rk3128-openwrt-18.06.9-firmware
           path: |
             openwrt/bin/targets/rockchip/armv7/*
-          if-no-files-found: error  # 固件缺失则直接报错，便于排查
+          if-no-files-found: error  # 固件缺失直接报错，便于排查
