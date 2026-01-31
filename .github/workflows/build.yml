@@ -1,11 +1,11 @@
-name: RK3128 OpenWrt Build (18.06.9 + ubuntu-latest)
+name: RK3128 OpenWrt Build (Lean + Ubuntu22.04 + Python3)
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # 秒级分配runner，无等待
     timeout-minutes: 240
     steps:
       - name: 步骤1：代码检出
@@ -14,51 +14,47 @@ jobs:
       - name: 步骤2：终极清理
         run: rm -rf openwrt && rm -rf ~/.ccache && sudo apt-get clean && sync && sudo swapoff -a
 
-      - name: 步骤3：安装适配依赖（ubuntu22.04 + OpenWrt18.06.9）
+      - name: 步骤3：安装依赖（仅Python3，无Python2）
         run: |
           sudo apt-get update
-          # 核心：添加deadsnakes仓库（ubuntu22.04获取python2.7的唯一途径）
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update
-          # 安装Python2.7 + 核心编译依赖
           sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git \
-          libncurses5-dev libssl-dev python2.7 rsync unzip wget ccache u-boot-tools \
+          libncurses5-dev libssl-dev python3 rsync unzip wget ccache u-boot-tools \
           libpam0g-dev liblzma-dev libncursesw5-dev libcap-dev
-          # 创建Python软链接（让OpenWrt18.06找到Python2）
-          sudo ln -sf /usr/bin/python2.7 /usr/bin/python
-          # 验证Python版本（确保安装成功）
-          python --version
-        # 检查点：输出“Python 2.7.x”，无“无法定位包”错误
+        # 检查点：无“无法定位包”，仅安装Python3，彻底绕开Python2问题
 
-      - name: 步骤4：克隆OpenWrt 18.06.9（完整git历史）
-        run: git clone -b v18.06.9 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
+      - name: 步骤4：克隆Lean版OpenWrt（适配RK3128，支持Python3）
+        run: git clone --depth=1 https://github.com/coolsnowwolf/lede.git openwrt --config http.sslVerify=false
+        # Lean版是RK3128适配最成熟的分支，无需完整git历史
 
-      - name: 步骤5：Feeds配置（适配RK3128）
+      - name: 步骤5：Feeds配置（预装打印服务+LuCI）
         run: |
           cd openwrt
-          sed -i '/telephony/d' feeds.conf.default 2>/dev/null
+          # 更新feeds（Lean版原生包含RK3128配置）
           ./scripts/feeds update -a
           ./scripts/feeds install -y luci luci-app-p910nd p910nd kmod-usb-printer
+        # 检查点：输出“安装成功”，无红色报错
 
-      - name: 步骤6：生成RK3128专属配置
+      - name: 步骤6：生成RK3128配置（Lean版官方模板）
         run: |
           cd openwrt
           export TERM=xterm
-          make -j1 TARGET=rockchip SUBTARGET=armv7 defconfig
-          echo -e "CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          # 生成Rockchip/armv7基础配置
+          echo -e "CONFIG_TARGET_rockchip=y\nCONFIG_TARGET_rockchip_armv7=y\nCONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_luci-theme-argon=y" > .config
+          # 调和配置（Lean版无兼容性问题）
           make -j1 olddefconfig
+        # 检查点：输出“# configuration written to .config”
 
       - name: 步骤7：下载依赖包
-        run: cd openwrt && export TERM=xterm && make -j1 download
+        run: cd openwrt && export TERM=xterm && make -j1 download > /dev/null 2>&1
 
-      - name: 步骤8：编译固件
+      - name: 步骤8：编译固件（多核心加速）
         run: cd openwrt && export TERM=xterm && make -j$(($(nproc)-1)) V=0
+        # 检查点：无menuconfig弹出，编译日志持续输出
 
       - name: 步骤9：上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: rk3128-openwrt-18.06.9-firmware
+          name: rk3128-openwrt-lean-firmware
           path: |
             openwrt/bin/targets/rockchip/armv7/*
           if-no-files-found: error
