@@ -1,4 +1,4 @@
-name: RK3128 OpenWrt Build (Fix Config Dependency)
+name: RK3128 OpenWrt Build (Full Clone + Fix Deps)
 on:
   push:
     branches: [ main ]
@@ -6,22 +6,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 180  # 完整克隆耗时稍长，延长超时
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: 终极清理（释放资源）
         run: rm -rf openwrt && rm -rf ~/.ccache && sudo apt-get clean && sync && sudo swapoff -a
-      - name: Install Dependencies（补充Python 2.7）
-        run: sudo apt-get update && sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python2 python3 rsync unzip wget ccache && sudo ln -sf /usr/bin/python2 /usr/bin/python
-      - name: Clone OpenWrt 19.07（轻量化，RK3128适配成熟）
-        run: git clone --depth=1 -b openwrt-19.07 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
+      - name: Install Dependencies（补全所有缺失依赖）
+        run: sudo apt-get update && sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python2 python3 rsync unzip wget ccache libpam0g-dev liblzma-dev libcap-dev libgnutls28-dev libldap2-dev libidn2-0-dev libssh2-1-dev libjansson-dev && sudo ln -sf /usr/bin/python2 /usr/bin/python
+      - name: Clone OpenWrt 19.07（完整克隆，保留git历史）
+        run: git clone -b openwrt-19.07 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false  # 移除--depth=1
       - name: 仅删除telephony feeds+官方源更新
         run: cd openwrt && sed -i '/telephony/d' feeds.conf.default 2>/dev/null && ./scripts/feeds update -a && ./scripts/feeds install -y luci luci-app-p910nd p910nd kmod-usb-printer
-      - name: 单核心生成RK3128配置+显式设备指定
-        run: cd openwrt && export TERM=xterm && make -j1 FORCE=1 TARGET=rockchip SUBTARGET=armv7 DEVICE=firefly-rk3128 defconfig
-      - name: 追加核心配置（禁用CONFIG_ALL_N，保留默认包）
-        run: cd openwrt && export TERM=xterm && sed -i '/CONFIG_ALL_N/d' .config && echo -e "CONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y" >> .config && make -j1 FORCE=1 olddefconfig
+      - name: 强制同步配置+生成RK3128配置
+        run: cd openwrt && export TERM=xterm && make -j1 FORCE=1 TARGET=rockchip SUBTARGET=armv7 DEVICE=firefly-rk3128 defconfig && make -j1 FORCE=1 syncconfig && make -j1 FORCE=1 olddefconfig
+      - name: 追加核心配置（仅打印服务+LuCI）
+        run: cd openwrt && export TERM=xterm && echo -e "CONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y" >> .config && make -j1 FORCE=1 olddefconfig
       - name: 下载依赖（单核心，避免冲突）
         run: cd openwrt && export TERM=xterm && make -j1 FORCE=1 download > /dev/null 2>&1
       - name: 编译固件（限核心+静默）
