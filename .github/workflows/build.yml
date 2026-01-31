@@ -1,4 +1,4 @@
-name: RK3128 OpenWrt Build (19.07 Fix Feeds)
+name: RK3128 OpenWrt Build (19.07 Defconfig Fix)
 on:
   push:
     branches: [ main ]
@@ -18,12 +18,12 @@ jobs:
         run: git clone --depth=1 -b openwrt-19.07 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
       - name: 仅删除telephony feeds+官方源更新（核心修复）
         run: cd openwrt && sed -i '/telephony/d' feeds.conf.default 2>/dev/null && ./scripts/feeds update -a && ./scripts/feeds install -y luci luci-app-p910nd p910nd kmod-usb-printer
-      - name: 快速生成Rockchip/armv7配置（多核心+无冗余）
-        run: cd openwrt && export TERM=xterm && make -j2 target/rockchip/armv7/defconfig > /dev/null 2>&1
+      - name: 单核心生成RK3128配置+显式设备指定（关键修复）
+        run: cd openwrt && export TERM=xterm && make -j1 TARGET=rockchip SUBTARGET=armv7 DEVICE=firefly-rk3128 defconfig
       - name: 追加核心配置（静默+非交互）
-        run: cd openwrt && export TERM=xterm && sed -i -e '$a CONFIG_ALL_N=y' -e '$a CONFIG_PACKAGE_p910nd=y' -e '$a CONFIG_PACKAGE_kmod-usb-printer=y' -e '$a CONFIG_PACKAGE_luci-app-p910nd=y' -e '$a CONFIG_PACKAGE_luci=y' .config && make -j2 olddefconfig > /dev/null 2>&1
-      - name: 下载依赖（多核心）
-        run: cd openwrt && export TERM=xterm && make -j2 download > /dev/null 2>&1
+        run: cd openwrt && export TERM=xterm && sed -i -e '$a CONFIG_ALL_N=y' -e '$a CONFIG_PACKAGE_p910nd=y' -e '$a CONFIG_PACKAGE_kmod-usb-printer=y' -e '$a CONFIG_PACKAGE_luci-app-p910nd=y' -e '$a CONFIG_PACKAGE_luci=y' .config && make -j1 olddefconfig > /dev/null 2>&1
+      - name: 下载依赖（单核心，避免冲突）
+        run: cd openwrt && export TERM=xterm && make -j1 download > /dev/null 2>&1
       - name: 编译固件（限核心+静默）
         run: cd openwrt && export TERM=xterm && make -s -j$(($(nproc)-1)) V=0
       - name: 上传固件（ARMv7优先）
