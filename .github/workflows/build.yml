@@ -1,4 +1,4 @@
-name: RK3128 OpenWrt Build (Final .config Direct Generate)
+name: RK3128 OpenWrt Build (YAML Fix)
 on:
   push:
     branches: [ main ]
@@ -18,23 +18,8 @@ jobs:
         run: git clone -b openwrt-21.02 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
       - name: 删telephony feeds+更新+安装核心包
         run: cd openwrt && sed -i '/telephony/d' feeds.conf.default 2>/dev/null && ./scripts/feeds update -a && ./scripts/feeds install -y luci luci-app-p910nd p910nd kmod-usb-printer
-      - name: 直接生成完整.config（绕开defconfig/olddefconfig）
-        run: cd openwrt && export TERM=xterm && cat > .config << EOF
-CONFIG_TARGET_rockchip=y
-CONFIG_TARGET_rockchip_armv7=y
-CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y
-CONFIG_PACKAGE_p910nd=y
-CONFIG_PACKAGE_kmod-usb-printer=y
-CONFIG_PACKAGE_luci-app-p910nd=y
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-theme-bootstrap=y
-CONFIG_PACKAGE_busybox_libpam=n
-CONFIG_PACKAGE_kexec-tools=n
-CONFIG_PACKAGE_lldpd=n
-CONFIG_PACKAGE_policycoreutils=n
-CONFIG_DEVEL=y
-CONFIG_TOOLCHAINOPTS=y
-EOF
+      - name: 直接生成完整.config（单行echo适配YAML语法）
+        run: cd openwrt && export TERM=xterm && echo -e "CONFIG_TARGET_rockchip=y\nCONFIG_TARGET_rockchip_armv7=y\nCONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_luci-theme-bootstrap=y\nCONFIG_PACKAGE_busybox_libpam=n\nCONFIG_PACKAGE_kexec-tools=n\nCONFIG_PACKAGE_lldpd=n\nCONFIG_PACKAGE_policycoreutils=n\nCONFIG_DEVEL=y\nCONFIG_TOOLCHAINOPTS=y" > .config
       - name: 跳过配置校验+强制编译（FORCE兜底）
         run: cd openwrt && export TERM=xterm && make -s -j$(($(nproc)-1)) FORCE=1 V=0
       - name: 上传固件（ARMv7优先）
