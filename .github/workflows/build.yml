@@ -1,4 +1,4 @@
-name: RK3128 OpenWrt Build (21.02 Final Fix)
+name: RK3128 OpenWrt Build (21.02 Fix Dep Package)
 on:
   push:
     branches: [ main ]
@@ -12,8 +12,8 @@ jobs:
         uses: actions/checkout@v4
       - name: 终极清理（释放资源）
         run: rm -rf openwrt && rm -rf ~/.ccache && sudo apt-get clean && sync && sudo swapoff -a
-      - name: Install Dependencies（补全所有缺失依赖）
-        run: sudo apt-get update && sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3 rsync unzip wget ccache u-boot-tools ncurses-term libpam0g-dev liblzma-dev libnetsnmp-dev
+      - name: Install Dependencies（移除冗余的libnetsnmp-dev）
+        run: sudo apt-get update && sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3 rsync unzip wget ccache u-boot-tools ncurses-term libpam0g-dev liblzma-dev
       - name: Clone OpenWrt 21.02（LTS稳定版）
         run: git clone -b openwrt-21.02 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
       - name: 删telephony feeds+更新+安装核心包
