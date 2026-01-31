@@ -1,4 +1,4 @@
-name: RK3128 OpenWrt Build (21.02 Fix Config File)
+name: RK3128 OpenWrt Build (21.02 Final Fix)
 on:
   push:
     branches: [ main ]
@@ -12,20 +12,22 @@ jobs:
         uses: actions/checkout@v4
       - name: 终极清理（释放资源）
         run: rm -rf openwrt && rm -rf ~/.ccache && sudo apt-get clean && sync && sudo swapoff -a
-      - name: Install Dependencies（21.02适配版，仅Python 3）
-        run: sudo apt-get update && sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3 rsync unzip wget ccache u-boot-tools ncurses-term
-      - name: Clone OpenWrt 21.02（LTS稳定版，适配Ubuntu 22.04）
+      - name: Install Dependencies（补全所有缺失依赖）
+        run: sudo apt-get update && sudo apt-get install -y build-essential gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3 rsync unzip wget ccache u-boot-tools ncurses-term libpam0g-dev liblzma-dev libnetsnmp-dev
+      - name: Clone OpenWrt 21.02（LTS稳定版）
         run: git clone -b openwrt-21.02 https://github.com/openwrt/openwrt.git openwrt --config http.sslVerify=false
       - name: 删telephony feeds+更新+安装核心包
         run: cd openwrt && sed -i '/telephony/d' feeds.conf.default 2>/dev/null && ./scripts/feeds update -a && ./scripts/feeds install -y luci luci-app-p910nd p910nd kmod-usb-printer
-      - name: 生成官方Rockchip/armv7基础配置（自动适配文件名）
-        run: cd openwrt && export TERM=xterm && make -j1 TARGET=rockchip SUBTARGET=armv7 defconfig > /dev/null 2>&1
-      - name: 追加RK3128设备+打印服务+LuCI配置（无硬编码）
-        run: cd openwrt && export TERM=xterm && echo -e "CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_luci-theme-bootstrap=y\nCONFIG_PACKAGE_busybox_libpam=n\nCONFIG_PACKAGE_kexec-tools=n\nCONFIG_PACKAGE_lldpd=n\nCONFIG_PACKAGE_nftables=n" >> .config && make -j1 olddefconfig
+      - name: 生成官方Rockchip/armv7基础配置
+        run: cd openwrt && export TERM=xterm && make -j1 FORCE=1 TARGET=rockchip SUBTARGET=armv7 defconfig > /dev/null 2>&1
+      - name: 强制同步配置+追加核心功能（仅保留必需项）
+        run: cd openwrt && export TERM=xterm && make -j1 FORCE=1 syncconfig > /dev/null 2>&1 && echo -e "CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y" >> .config
+      - name: 执行olddefconfig（FORCE兜底+显示关键日志）
+        run: cd openwrt && export TERM=xterm && make -j1 FORCE=1 olddefconfig
       - name: 下载依赖（单核心，稳定优先）
-        run: cd openwrt && export TERM=xterm && make -j1 download > /dev/null 2>&1
+        run: cd openwrt && export TERM=xterm && make -j1 FORCE=1 download > /dev/null 2>&1
       - name: 编译固件（多核心加速）
-        run: cd openwrt && export TERM=xterm && make -s -j$(($(nproc)-1)) V=0
+        run: cd openwrt && export TERM=xterm && make -s -j$(($(nproc)-1)) FORCE=1 V=0
       - name: 上传固件（ARMv7优先）
         uses: actions/upload-artifact@v4
         with:
