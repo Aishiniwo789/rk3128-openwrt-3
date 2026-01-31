@@ -1,4 +1,4 @@
-name: RK3128 OpenWrt Build (Force Non-Interactive)
+name: RK3128 OpenWrt Build (Fix Config Syntax)
 on:
   push:
     branches: [ main ]
@@ -21,9 +21,9 @@ jobs:
       - name: 仅安装必需Feeds（绝不触达telephony）
         run: cd openwrt && ./scripts/feeds install -y -q luci-base luci-mod-admin-full luci-theme-bootstrap p910nd kmod-usb-printer > /dev/null 2>&1
       - name: 强制非交互生成Rockchip/armv7配置（核心修复）
-        run: cd openwrt && export TERM=xterm && echo -e "CONFIG_TARGET_rockchip=y\nCONFIG_TARGET_rockchip_armv7=y\nCONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y\nCONFIG_TARGET_ath79=n\nCONFIG_PACKAGE_busybox_libpam=n\nCONFIG_PACKAGE_kexec-tools=n\nCONFIG_PACKAGE_lldpd=n\nCONFIG_PACKAGE_policycoreutils=n" > .config && make -j1 defconfig > /dev/null 2>&1
-      - name: 启用打印服务+屏蔽冗余包
-        run: cd openwrt && echo -e "CONFIG_PACKAGE_p910nd=y\nCONFIG_PACKAGE_kmod-usb-printer=y\nCONFIG_PACKAGE_luci-app-p910nd=y\nCONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_luci-base=y\nCONFIG_PACKAGE_luci-mod-admin-full=y\nCONFIG_PACKAGE_luci-theme-bootstrap=y\nCONFIG_PACKAGE_freeswitch=n\nCONFIG_PACKAGE_kamailio=n" >> .config && export TERM=xterm && make -j1 olddefconfig > /dev/null 2>&1
+        run: cd openwrt && export TERM=xterm && echo "CONFIG_TARGET_rockchip=y;CONFIG_TARGET_rockchip_armv7=y;CONFIG_TARGET_rockchip_armv7_DEVICE_firefly-rk3128=y;CONFIG_TARGET_ath79=n;CONFIG_PACKAGE_busybox_libpam=n;CONFIG_PACKAGE_kexec-tools=n;CONFIG_PACKAGE_lldpd=n;CONFIG_PACKAGE_policycoreutils=n" | tr ';' '\n' > .config && make -j1 defconfig > /dev/null 2>&1
+      - name: 启用打印服务+屏蔽冗余包（单行无换行符）
+        run: cd openwrt && echo "CONFIG_PACKAGE_p910nd=y;CONFIG_PACKAGE_kmod-usb-printer=y;CONFIG_PACKAGE_luci-app-p910nd=y;CONFIG_PACKAGE_luci=y;CONFIG_PACKAGE_luci-base=y;CONFIG_PACKAGE_luci-mod-admin-full=y;CONFIG_PACKAGE_luci-theme-bootstrap=y;CONFIG_PACKAGE_freeswitch=n;CONFIG_PACKAGE_kamailio=n" | tr ';' '\n' >> .config && export TERM=xterm && make -j1 config && make -j1 olddefconfig > /dev/null 2>&1
       - name: 下载依赖（单核心+非交互）
         run: cd openwrt && export TERM=xterm && make -j1 download > /dev/null 2>&1
       - name: 编译固件（限核心+静默，避免OOM）
